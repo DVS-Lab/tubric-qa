@@ -218,3 +218,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Never publish study images, local reports, or MRIQC work products accidentally.
+*.nii
+*.nii.gz
+*.dcm
+*.sif
+data/
+reports/
+work/
+demo-data/
+mriqc-output/

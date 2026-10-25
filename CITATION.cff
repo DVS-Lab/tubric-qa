@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "Please cite the software version/commit and MRIQC when using these reports."
+title: "TUBRIC QA: portable BIDS/MRIQC cohort quality reports"
+type: software
+version: 0.1.0
+date-released: 2026-10-25
+authors:
+  - name: "Temple University Neuroeconomics Lab"
+repository-code: "https://github.com/DVS-Lab/tubric-qa"
+license: MIT
