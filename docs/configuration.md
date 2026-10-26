@@ -14,8 +14,19 @@ input-completeness checks, or exclusion decisions.
 
 Set `plot_metrics` to a list of metric keys to choose panels, or to `null` to
 plot every configured metric. Add optional metric keys here to display them.
-Existing reports are unchanged; rebuild into a new output directory to use
-the simplified layout.
+Existing reports are unchanged. Reuse their saved tables for the simplified
+layout without indexing or reading BIDS/MRIQC again:
+
+```bash
+tubric-qa replot /path/to/existing-report --output /path/to/new-simplified-report
+tubric-qa check /path/to/new-simplified-report
+```
+
+The source report is verified first. All QC tables, thresholds, flags and
+validation state are preserved, including unresolved input findings. Only
+plots/presentation change. Original analysis provenance is retained alongside
+new rendering provenance. This is a saved-snapshot refresh, not a new live-input
+validation; add `--inputs` to `check` only when that additional check is wanted.
 
 ## Scanner Comparisons
 

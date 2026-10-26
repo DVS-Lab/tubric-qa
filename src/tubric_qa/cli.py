@@ -51,6 +51,11 @@ def parser():
     verify.add_argument("--inputs", action="store_true")
     verify.add_argument("--strict", action="store_true")
     verify.add_argument("--quiet", action="store_true", help="Suppress progress and heartbeats")
+    redraw = commands.add_parser("replot", help="Simplify plots from saved report tables; no re-indexing")
+    redraw.add_argument("source", type=Path)
+    redraw.add_argument("--output", type=Path, required=True)
+    redraw.add_argument("--quiet", action="store_true")
+    redraw.add_argument("--strict", action="store_true")
     commands.add_parser("config", help="Print the complete default configuration JSON")
     demo = commands.add_parser("demo", help="Create explicitly synthetic BIDS/MRIQC data")
     demo.add_argument("destination", type=Path)
@@ -100,6 +105,14 @@ def main(argv=None):
                     tasks=args.task, sessions=args.session, progress=progress,
                 )
             print(f"Report: {args.output.resolve() / 'index.html'}")
+        elif args.command == "replot":
+            with Progress(enabled=not args.quiet) as progress:
+                progress("Loading plotting libraries; saved report only")
+                from .replot import replot
+
+                state = replot(args.source, args.output, progress=progress)
+            print(f"Report: {args.output.resolve() / 'index.html'}")
+            print("Saved snapshot replotted. Live inputs not checked.")
         else:
             with Progress(enabled=not args.quiet) as progress:
                 progress("Loading verification libraries")

@@ -138,6 +138,18 @@ Anatomical plots show smoothness only; tSNR and FD are functional metrics.
 Supplementary metrics remain in the downloadable tables, not additional panels.
 Plot selection does not change review flags, completeness checks or exclusions.
 
+Already built a report? Regenerate the simplified plots from its saved tables,
+without re-indexing BIDS or reading MRIQC again:
+
+```bash
+tubric-qa replot /path/to/existing-report --output /path/to/new-simplified-report
+tubric-qa check /path/to/new-simplified-report
+```
+
+The original report stays untouched. The new report preserves its QC tables
+and unresolved findings; live inputs are not rechecked unless `check --inputs`
+is requested separately.
+
 Recorded functional metrics: **tSNR, mean FD, standardized DVARS, MRIQC FWHM,
 EFC and FBER**. Structural T1w/T2w reports include FWHM, EFC, FBER, CNR and CJV.
 TEDANA, brain coverage and other metrics can be added through an explicit,
