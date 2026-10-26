@@ -7,7 +7,7 @@ import nibabel as nib
 import numpy as np
 
 from bids import BIDSLayout
-from bids.layout import parse_file_entities
+from bids.layout import BIDSLayoutIndexer, parse_file_entities
 
 from .config import METRICS
 from .io import finite, read_json
@@ -31,6 +31,8 @@ ALLOWED_META = {
     "ManufacturersModelName": "model",
     "SoftwareVersions": "software_version",
 }
+REPORT_SUFFIXES = ["bold", "T1w", "T2w"]
+IMAGE_EXTENSIONS = [".nii", ".nii.gz"]
 
 
 def entities(path):
@@ -62,28 +64,59 @@ def selected(row, selection):
     return all(not labels or row[key] in labels for key, labels in (selection or {}).items())
 
 
-def discover(bids_dir, selection=None, progress=None):
-    progress = progress or (lambda message: None)
+def raw_layout(bids_dir, *, index_metadata):
     bids_dir = Path(bids_dir).resolve()
     description = read_json(bids_dir / "dataset_description.json")
     if description.get("DatasetType", "raw") != "raw":
         raise ValueError("--bids must be a raw BIDS dataset, not a derivative")
-    # Nonconforming-but-parseable target files remain visible rather than silently dropped.
-    progress("Indexing BIDS metadata (whole root; images are not processed)")
-    layout = BIDSLayout(bids_dir, validate=False, derivatives=False)
-    rows, metadata_inputs = [], {bids_dir / "dataset_description.json"}
-    files = sorted(
-        layout.get(
-            suffix=["bold", "T1w", "T2w"], extension=[".nii", ".nii.gz"], return_type="filename"
-        )
+    # Keep all filename records, but do not build unused fieldmap/events/etc.
+    # metadata associations. Never filter this index by task/session: generic
+    # ancestor JSONs must remain available for PyBIDS metadata inheritance.
+    indexer = BIDSLayoutIndexer(
+        validate=False, index_metadata=index_metadata,
+        suffix=REPORT_SUFFIXES, extension=list(IMAGE_EXTENSIONS),
     )
-    files = [f for f in files if selected(entities(f), selection)]
+    return BIDSLayout(bids_dir, validate=False, derivatives=False, indexer=indexer)
+
+
+def raw_image_paths(layout, selection):
+    root = Path(layout.root)
+    return [
+        path for path in sorted(layout.get(
+            suffix=REPORT_SUFFIXES, extension=IMAGE_EXTENSIONS, return_type="filename"
+        ))
+        if Path(path).relative_to(root).parts[0].startswith("sub-")
+        and selected(entities(path), selection)
+    ]
+
+
+def metadata_paths(layout):
+    # Retain the original conservative, dataset-wide JSON fingerprint contract.
+    root = Path(layout.root)
+    return {root / "dataset_description.json"} | {
+        Path(p) for p in layout.get(extension=".json", return_type="filename")
+        if "derivatives" not in Path(p).relative_to(root).parts
+    }
+
+
+def input_paths(bids_dir, selection=None):
+    """Detect additions without rereading headers or rebuilding metadata tags."""
+    layout = raw_layout(bids_dir, index_metadata=False)
+    return {Path(p) for p in raw_image_paths(layout, selection)} | metadata_paths(layout)
+
+
+def discover(bids_dir, selection=None, progress=None):
+    progress = progress or (lambda message: None)
+    bids_dir = Path(bids_dir).resolve()
+    # Nonconforming-but-parseable target files remain visible rather than silently dropped.
+    progress("Indexing BIDS paths and BOLD/T1w/T2w metadata (images are not processed)")
+    layout = raw_layout(bids_dir, index_metadata=True)
+    rows = []
+    files = raw_image_paths(layout, selection)
     progress(f"Reading selected image headers and inherited metadata: {len(files)} candidates")
     for number, file in enumerate(files, 1):
         path = Path(file)
         relative = path.relative_to(bids_dir)
-        if not relative.parts[0].startswith("sub-"):
-            continue
         row = entities(path)
         row.update(
             image_id=relative.as_posix(),
@@ -123,11 +156,7 @@ def discover(bids_dir, selection=None, progress=None):
     if not rows:
         raise ValueError("No BOLD/T1w/T2w NIfTI inputs match the selection in raw sub-* directories")
     # Hash metadata, never serialize its contents (it may contain sensitive fields).
-    metadata_inputs.update(
-        Path(p)
-        for p in layout.get(extension=".json", return_type="filename")
-        if "derivatives" not in Path(p).relative_to(bids_dir).parts
-    )
+    metadata_inputs = metadata_paths(layout)
     counts = defaultdict(int)
     for row in rows:
         counts[tuple(row[key] for key in IDENTITY)] += 1

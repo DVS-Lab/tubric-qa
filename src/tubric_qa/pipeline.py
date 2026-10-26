@@ -11,7 +11,7 @@ import tempfile
 from . import __version__
 from .config import load_config
 from .inventory import (
-    IDENTITY, attach_extras, attach_mriqc, discover, mriqc_index, normalize_selection,
+    IDENTITY, attach_extras, attach_mriqc, discover, input_paths, mriqc_index, normalize_selection,
 )
 from .io import disjoint_output, fingerprint, read_json, sha256, write_json, write_tsv
 from .report import figures, html_report, methods
@@ -163,7 +163,9 @@ def verify_inputs(receipts):
             raise ValueError(f"Input changed: {item['path']}")
 
 
-def check(output, inputs=False):
+def check(output, inputs=False, progress=None):
+    progress = progress or (lambda message: None)
+    progress("Verifying report artifacts")
     output = Path(output).resolve()
     provenance = read_json(output / "provenance.json")
     required = {
@@ -184,10 +186,12 @@ def check(output, inputs=False):
         if output not in path.parents or sha256(path) != digest:
             raise ValueError(f"Report file changed or unsafe path: {relative}")
     if inputs:
+        progress("Verifying recorded input fingerprints")
         verify_inputs(provenance["inputs"])
         selection = provenance.get("selection")
-        rows, metadata = discover(provenance["bids_root"], selection)
-        current = {str(p.resolve()) for p in metadata} | {r["bids_path"] for r in rows}
+        progress("Checking BIDS filenames for additions (no metadata re-indexing)")
+        current = {str(p.resolve()) for p in input_paths(provenance["bids_root"], selection)}
+        progress("Checking MRIQC filenames for additions")
         current |= {
             str(p.resolve())
             for root in provenance["mriqc_roots_in_priority_order"]
@@ -197,4 +201,5 @@ def check(output, inputs=False):
         recorded = {r["path"] for r in provenance["inputs"]}
         if not current <= recorded:
             raise ValueError("New BIDS/MRIQC inputs found; rebuild in a new report directory")
+    progress("Report verification complete")
     return read_json(output / "validation.json")

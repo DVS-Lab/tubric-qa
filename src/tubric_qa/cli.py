@@ -50,6 +50,7 @@ def parser():
     verify.add_argument("output", type=Path)
     verify.add_argument("--inputs", action="store_true")
     verify.add_argument("--strict", action="store_true")
+    verify.add_argument("--quiet", action="store_true", help="Suppress progress and heartbeats")
     commands.add_parser("config", help="Print the complete default configuration JSON")
     demo = commands.add_parser("demo", help="Create explicitly synthetic BIDS/MRIQC data")
     demo.add_argument("destination", type=Path)
@@ -100,9 +101,11 @@ def main(argv=None):
                 )
             print(f"Report: {args.output.resolve() / 'index.html'}")
         else:
-            from .pipeline import check
+            with Progress(enabled=not args.quiet) as progress:
+                progress("Loading verification libraries")
+                from .pipeline import check
 
-            state = check(args.output, inputs=args.inputs)
+                state = check(args.output, inputs=args.inputs, progress=progress)
             print(
                 "Report integrity verified."
                 + (" Live inputs verified." if args.inputs else " Live inputs not checked.")

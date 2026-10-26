@@ -69,6 +69,11 @@ can dominate runtime. There is no reliable cohort runtime estimate yet; use the
 elapsed stage messages rather than assuming silence means MRIQC is running.
 The first plot in a new environment may also take longer while Matplotlib
 builds its font cache; its cache directory must be writable.
+Metadata associations are built only for BOLD/T1w/T2w, not fieldmaps, events or
+other unsupported modalities. Directory/filename discovery still traverses the
+raw BIDS root. `check --inputs` verifies fingerprints and inventories filenames
+without rebuilding the metadata associations or rereading NIfTI headers. It
+also prints progress and heartbeats (`--quiet` is available).
 Avoid `--hash-images` unless you need full image-content hashes: the default uses
 image size/mtime and does not load image voxel arrays.
 
@@ -86,6 +91,31 @@ python -m pip install --no-build-isolation --no-deps -e .
 Do not use that pinned reference lock with a different Python version. If
 installation fails, retain the original error and report `python --version`
 and `python -m pip --version`; no repository changes are normally needed.
+
+### Linux: Missing `ensurepip` Or Broken `venv`
+
+If `python3 -m venv` fails because `ensurepip` is unavailable, Python could not
+bootstrap pip into the environment. This happens before TUBRIC QA is installed;
+it is not evidence of incompatible package dependencies. Ask your administrator
+for the matching Python venv support, or use Conda with its own Python and pip.
+Do not install into Conda's shared `base` environment or use `sudo pip`.
+
+From the cloned `tubric-qa` repository, this is an alternative to `venv`, not an
+additional environment to activate inside it:
+
+```bash
+conda create -n tubric-qa python=3.13 pip -y
+conda activate tubric-qa
+python -m pip install -r requirements-lock.txt
+python -m pip install --no-build-isolation --no-deps -e .
+python -m pip check
+tubric-qa --version
+```
+
+If the named Conda environment already exists, activate it rather than creating
+it again. No source-code changes are needed for this workaround. After successful
+installation, run the synthetic demo below before starting a large cohort.
+See Python's [`ensurepip` documentation](https://docs.python.org/3.13/library/ensurepip.html).
 
 ## What You Get
 
