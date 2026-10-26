@@ -160,7 +160,10 @@ selected sessions: {escape(', '.join(state.get('selection', {}).get('session', [
 
 def methods(output, config):
     (output / "methods.md").write_text(
-        "# Methods\n\nRaw BIDS inputs were indexed with PyBIDS, including metadata inheritance. "
+        "# Methods\n\nRaw BIDS filenames were indexed with PyBIDS. Scanner metadata was read "
+        "from per-build cached JSON sidecars following BIDS ancestor-directory inheritance, "
+        "without building a full metadata database. Multiple applicable sidecars at one "
+        "directory level are flagged as ambiguous rather than selected arbitrarily. "
         "BOLD, T1w and T2w magnitude images were matched to MRIQC IQM JSONs by exact BIDS entities. "
         "Sessions and run numbers were never inferred. Each echo remains a separate image. "
         "Phase/real/imaginary images are listed but not used for these IQMs.\n\n"

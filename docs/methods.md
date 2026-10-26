@@ -54,6 +54,17 @@ included; derivatives, sourcedata, work and unsupported modalities are not
 treated as raw acquisitions. Inspect a separate official BIDS validation
 report. No behavioral-source, stimulus, timing or task-validity claims are made.
 
+Only filenames are indexed in PyBIDS; its full metadata database is disabled.
+Scanner fields (Manufacturer, ManufacturersModelName, SoftwareVersions) are
+resolved from cached JSON sidecars at ancestor directories, with matching
+suffix and entity values and no additional sidecar entities. Lower directories
+override higher directories. Multiple applicable JSONs at the same directory
+level are invalid under the BIDS inheritance rule and produce a metadata issue,
+not a guessed software label. Malformed JSONs and identity conflicts also stay
+visible. Inheritance is regression-tested against PyBIDS on valid inputs.
+No metadata cache is reused between builds. All indexed raw JSONs remain
+fingerprinted conservatively, including outside a task/session selection.
+
 `check --inputs` verifies the recorded sources and discovers newly added images
 and IQMs. Without `--hash-images`, same-size changes that preserve NIfTI mtimes
 are not detectable. Output manifests are integrity checks, not signatures;

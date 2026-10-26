@@ -1,6 +1,7 @@
 """PyBIDS inventory and conservative MRIQC association."""
 
 from collections import defaultdict
+from functools import lru_cache
 from pathlib import Path
 
 import nibabel as nib
@@ -8,9 +9,11 @@ import numpy as np
 
 from bids import BIDSLayout
 from bids.layout import BIDSLayoutIndexer, parse_file_entities
+from bids.layout.models import Config
 
 from .config import METRICS
 from .io import finite, read_json
+from .scanner_metadata import ScannerMetadata
 
 IDENTITY = (
     "subject",
@@ -35,8 +38,20 @@ REPORT_SUFFIXES = ["bold", "T1w", "T2w"]
 IMAGE_EXTENSIONS = [".nii", ".nii.gz"]
 
 
+@lru_cache(maxsize=1)
+def entity_definitions():
+    definitions = {}
+    for name in ("bids", "derivatives"):
+        definitions.update(Config.load(name).entities)
+    return list(definitions.values())
+
+
+def parse_entities(path):
+    return parse_file_entities(str(path), entities=entity_definitions())
+
+
 def entities(path):
-    parsed = parse_file_entities(str(path), config=["bids", "derivatives"])
+    parsed = parse_entities(path)
     return {key: str(parsed.get(key, "")) for key in IDENTITY}
 
 
@@ -109,10 +124,16 @@ def discover(bids_dir, selection=None, progress=None):
     progress = progress or (lambda message: None)
     bids_dir = Path(bids_dir).resolve()
     # Nonconforming-but-parseable target files remain visible rather than silently dropped.
-    progress("Indexing BIDS paths and BOLD/T1w/T2w metadata (images are not processed)")
-    layout = raw_layout(bids_dir, index_metadata=True)
+    progress("Indexing BIDS filenames only (no full metadata database)")
+    layout = raw_layout(bids_dir, index_metadata=False)
     rows = []
     files = raw_image_paths(layout, selection)
+    metadata_inputs = metadata_paths(layout)
+    progress("Preparing cached scanner-sidecar lookup")
+    scanner = ScannerMetadata(
+        bids_dir, metadata_inputs, parse_entities, ALLOWED_META,
+        [entity.name for entity in entity_definitions()],
+    )
     progress(f"Reading selected image headers and inherited metadata: {len(files)} candidates")
     for number, file in enumerate(files, 1):
         path = Path(file)
@@ -139,10 +160,10 @@ def discover(bids_dir, selection=None, progress=None):
         except (OSError, ValueError, nib.filebasedimages.ImageFileError):
             row["validation_issues"].append("unreadable_image_header")
         try:
-            metadata = layout.get_metadata(file)
+            metadata = scanner.read(path)
             for key, target in ALLOWED_META.items():
                 row[target] = text(metadata.get(key))
-        except (ValueError, KeyError, TypeError) as exc:
+        except (OSError, ValueError, KeyError, TypeError) as exc:
             row["metadata_status"] = "invalid"
             row["validation_issues"].append(f"metadata_error:{type(exc).__name__}")
         for target in ALLOWED_META.values():
@@ -156,7 +177,6 @@ def discover(bids_dir, selection=None, progress=None):
     if not rows:
         raise ValueError("No BOLD/T1w/T2w NIfTI inputs match the selection in raw sub-* directories")
     # Hash metadata, never serialize its contents (it may contain sensitive fields).
-    metadata_inputs = metadata_paths(layout)
     counts = defaultdict(int)
     for row in rows:
         counts[tuple(row[key] for key in IDENTITY)] += 1
@@ -175,7 +195,7 @@ def mriqc_index(root, selection=None):
         if path.name.endswith(("_bold.json", "_T1w.json", "_T2w.json")):
             if not selected(entities(path), selection):
                 continue
-            parsed = parse_file_entities(str(path), config=["bids", "derivatives"])
+            parsed = parse_entities(path)
             if any(parsed.get(key) for key in ("space", "desc", "resolution", "density")):
                 continue
             result[identity(path)].append(path)

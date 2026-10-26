@@ -128,6 +128,7 @@ def build(bids_dir, mriqc_dirs, output, config_path=None, extras=None, hash_imag
             "package": "tubric-qa",
             "version": __version__,
             "selection": selection,
+            "scanner_metadata_reader": "cached-ancestor-json-v1",
             "dependencies": versions,
             "created_utc": datetime.now(timezone.utc).isoformat(),
             "bids_root": str(Path(bids_dir).resolve()),

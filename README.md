@@ -61,18 +61,21 @@ The final output directory appears only after successful validation; temporary
 files are built alongside it so incomplete reports are not mistaken for finished ones.
 
 This is much less work than MRIQC, but not just reading JSONs: PyBIDS first
-indexes the whole supplied BIDS root to resolve inherited metadata, then we read
-selected image headers, match existing IQMs, fingerprint inputs and render PNGs.
+indexes filenames in the supplied BIDS root, then we read selected image headers,
+resolve scanner metadata, match existing IQMs, fingerprint inputs and render PNGs.
 Task/session filters reduce header reads and plotting, not the initial whole-root
 indexing. Shared/network storage, the number of images/echoes and figure groups
 can dominate runtime. There is no reliable cohort runtime estimate yet; use the
 elapsed stage messages rather than assuming silence means MRIQC is running.
 The first plot in a new environment may also take longer while Matplotlib
 builds its font cache; its cache directory must be writable.
-Metadata associations are built only for BOLD/T1w/T2w, not fieldmaps, events or
-other unsupported modalities. Directory/filename discovery still traverses the
-raw BIDS root. `check --inputs` verifies fingerprints and inventories filenames
-without rebuilding the metadata associations or rereading NIfTI headers. It
+We do **not** build PyBIDS's full metadata database. A per-build cached JSON
+reader resolves the three scanner fields from applicable ancestor sidecars,
+using PyBIDS entity parsing and BIDS inheritance rules. Multiple applicable
+sidecars at the same directory level are flagged as ambiguous, not resolved by
+filename order. Directory/filename discovery still traverses the raw BIDS root.
+`check --inputs` verifies fingerprints and inventories filenames without
+resolving scanner metadata again or rereading NIfTI headers. It
 also prints progress and heartbeats (`--quiet` is available).
 Avoid `--hash-images` unless you need full image-content hashes: the default uses
 image size/mtime and does not load image voxel arrays.
