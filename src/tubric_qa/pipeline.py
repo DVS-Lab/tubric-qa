@@ -10,24 +10,35 @@ import tempfile
 
 from . import __version__
 from .config import load_config
-from .inventory import IDENTITY, attach_extras, attach_mriqc, discover, mriqc_index
+from .inventory import (
+    IDENTITY, attach_extras, attach_mriqc, discover, mriqc_index, normalize_selection,
+)
 from .io import disjoint_output, fingerprint, read_json, sha256, write_json, write_tsv
 from .report import figures, html_report, methods
 from .statistics import calculate
 
 
-def build(bids_dir, mriqc_dirs, output, config_path=None, extras=None, hash_images=False):
+def build(bids_dir, mriqc_dirs, output, config_path=None, extras=None, hash_images=False,
+          *, tasks=None, sessions=None, progress=None):
+    progress = progress or (lambda message: None)
+    selection = normalize_selection(tasks, sessions)
+    progress("Starting report-only build; MRIQC will not be launched")
     inputs = [bids_dir, *mriqc_dirs, config_path, extras]
     output = disjoint_output(output, inputs)
     config = load_config(config_path)
-    rows, metadata = discover(bids_dir)
-    used, orphans = attach_mriqc(rows, mriqc_dirs, config)
+    rows, metadata = discover(bids_dir, selection, progress)
+    progress(f"Indexing existing MRIQC results in {len(mriqc_dirs)} root(s)")
+    indexes = [mriqc_index(root, selection) for root in mriqc_dirs]
+    progress(f"Matching MRIQC results to {len(rows)} selected images")
+    used, orphans = attach_mriqc(rows, mriqc_dirs, config, indexes=indexes)
     if extras:
         attach_extras(rows, extras, config)
+    progress("Calculating independent within-group QC flags and summaries")
     thresholds, flags, summary = calculate(rows, config)
     required = {"bold": ("tsnr", "fd_mean"), "T1w": ("efc", "cjv"), "T2w": ("efc", "cjv")}
     state = {
         "schema_version": 1,
+        "selection": selection,
         "n_images": len(rows),
         "n_subjects": len({r["subject"] for r in rows}),
         "n_applicable": sum(r["applicable"] for r in rows),
@@ -50,8 +61,9 @@ def build(bids_dir, mriqc_dirs, output, config_path=None, extras=None, hash_imag
         for key in ("n_mriqc_unresolved", "n_identity_or_metadata_issues", "n_missing_core_metrics")
     )
     # Capture all indexed candidates, including orphans, for reproducibility.
-    all_iqms = {p for root in mriqc_dirs for paths in mriqc_index(root).values() for p in paths}
+    all_iqms = {p for index in indexes for paths in index.values() for p in paths}
     paths = metadata | used | all_iqms | {Path(p).resolve() for p in (config_path, extras) if p}
+    progress("Fingerprinting metadata and inputs" + (" (full image hashes requested)" if hash_images else " (image size/mtime only)"))
     receipts = [fingerprint(p) for p in sorted(paths)]
     receipts += [fingerprint(r["bids_path"], full=hash_images) for r in rows]
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -60,6 +72,7 @@ def build(bids_dir, mriqc_dirs, output, config_path=None, extras=None, hash_imag
     os.umask(mask)
     stage.chmod(0o777 & ~mask)
     try:
+        progress("Writing report tables")
         write_json(stage / "config.json", config)
         write_json(stage / "validation.json", state)
         columns = [
@@ -103,7 +116,8 @@ def build(bids_dir, mriqc_dirs, output, config_path=None, extras=None, hash_imag
             list(summary[0]) if summary else ["metric", "status"],
         )
         write_tsv(stage / "orphan_mriqc.tsv", orphans, ["mriqc_path", "reason"])
-        links = figures(stage, rows, config, thresholds)
+        progress("Rendering figures")
+        links = figures(stage, rows, config, thresholds, progress=progress)
         html_report(stage, rows, config, links, state)
         methods(stage, config)
         versions = {
@@ -113,6 +127,7 @@ def build(bids_dir, mriqc_dirs, output, config_path=None, extras=None, hash_imag
         provenance = {
             "package": "tubric-qa",
             "version": __version__,
+            "selection": selection,
             "dependencies": versions,
             "created_utc": datetime.now(timezone.utc).isoformat(),
             "bids_root": str(Path(bids_dir).resolve()),
@@ -129,10 +144,12 @@ def build(bids_dir, mriqc_dirs, output, config_path=None, extras=None, hash_imag
         }
         write_json(stage / "provenance.json", provenance)
         # Refuse to publish a report from inputs modified during the build.
+        progress("Verifying input fingerprints before publishing the report")
         verify_inputs(receipts)
         if output.exists():
             raise ValueError("Output appeared while building; refusing to replace it")
         stage.rename(output)
+        progress(f"Report complete: {len(rows)} images, {len(links)} figures")
     except BaseException:
         shutil.rmtree(stage)
         raise
@@ -168,12 +185,13 @@ def check(output, inputs=False):
             raise ValueError(f"Report file changed or unsafe path: {relative}")
     if inputs:
         verify_inputs(provenance["inputs"])
-        rows, metadata = discover(provenance["bids_root"])
+        selection = provenance.get("selection")
+        rows, metadata = discover(provenance["bids_root"], selection)
         current = {str(p.resolve()) for p in metadata} | {r["bids_path"] for r in rows}
         current |= {
             str(p.resolve())
             for root in provenance["mriqc_roots_in_priority_order"]
-            for paths in mriqc_index(root).values()
+            for paths in mriqc_index(root, selection).values()
             for p in paths
         }
         recorded = {r["path"] for r in provenance["inputs"]}

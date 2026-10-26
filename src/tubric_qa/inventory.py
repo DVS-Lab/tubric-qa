@@ -48,19 +48,38 @@ def text(value):
     return str(value) if value is not None else "unknown"
 
 
-def discover(bids_dir):
+def normalize_selection(tasks=None, sessions=None):
+    selection = {}
+    for key, values, prefix in (("task", tasks, "task-"), ("session", sessions, "ses-")):
+        labels = sorted({v.removeprefix(prefix) for v in (values or [])})
+        if any(not v or not v.isascii() or not v.isalnum() for v in labels):
+            raise ValueError(f"Invalid {key} label; use BIDS labels, not paths or wildcards")
+        selection[key] = labels
+    return selection
+
+
+def selected(row, selection):
+    return all(not labels or row[key] in labels for key, labels in (selection or {}).items())
+
+
+def discover(bids_dir, selection=None, progress=None):
+    progress = progress or (lambda message: None)
     bids_dir = Path(bids_dir).resolve()
     description = read_json(bids_dir / "dataset_description.json")
     if description.get("DatasetType", "raw") != "raw":
         raise ValueError("--bids must be a raw BIDS dataset, not a derivative")
     # Nonconforming-but-parseable target files remain visible rather than silently dropped.
+    progress("Indexing BIDS metadata (whole root; images are not processed)")
     layout = BIDSLayout(bids_dir, validate=False, derivatives=False)
     rows, metadata_inputs = [], {bids_dir / "dataset_description.json"}
-    for file in sorted(
+    files = sorted(
         layout.get(
             suffix=["bold", "T1w", "T2w"], extension=[".nii", ".nii.gz"], return_type="filename"
         )
-    ):
+    )
+    files = [f for f in files if selected(entities(f), selection)]
+    progress(f"Reading selected image headers and inherited metadata: {len(files)} candidates")
+    for number, file in enumerate(files, 1):
         path = Path(file)
         relative = path.relative_to(bids_dir)
         if not relative.parts[0].startswith("sub-"):
@@ -99,8 +118,10 @@ def discover(bids_dir):
         if not row["applicable"]:
             row["mriqc_status"] = "not_applicable"
         rows.append(row)
+        if number % 50 == 0 or number == len(files):
+            progress(f"Image headers and metadata: {number}/{len(files)}")
     if not rows:
-        raise ValueError("No BOLD/T1w/T2w NIfTI inputs found in raw sub-* directories")
+        raise ValueError("No BOLD/T1w/T2w NIfTI inputs match the selection in raw sub-* directories")
     # Hash metadata, never serialize its contents (it may contain sensitive fields).
     metadata_inputs.update(
         Path(p)
@@ -116,13 +137,15 @@ def discover(bids_dir):
     return rows, metadata_inputs
 
 
-def mriqc_index(root):
+def mriqc_index(root, selection=None):
     result = defaultdict(list)
     root = Path(root).resolve()
     if not root.is_dir():
         raise ValueError(f"MRIQC root does not exist: {root}")
     for path in sorted(root.rglob("sub-*.json")):
         if path.name.endswith(("_bold.json", "_T1w.json", "_T2w.json")):
+            if not selected(entities(path), selection):
+                continue
             parsed = parse_file_entities(str(path), config=["bids", "derivatives"])
             if any(parsed.get(key) for key in ("space", "desc", "resolution", "density")):
                 continue
@@ -142,8 +165,9 @@ def flatten(data):
     return result
 
 
-def attach_mriqc(rows, roots, config):
-    indexes = [mriqc_index(root) for root in roots]
+def attach_mriqc(rows, roots, config, indexes=None):
+    if indexes is None:
+        indexes = [mriqc_index(root) for root in roots]
     used = set()
     for row in rows:
         row["software_label"] = config["software_labels"].get(

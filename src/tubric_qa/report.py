@@ -12,7 +12,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def figures(output, rows, config, thresholds):
+def figures(output, rows, config, thresholds, progress=None):
+    progress = progress or (lambda message: None)
     folder = output / "figures"
     folder.mkdir()
     groups = defaultdict(list)
@@ -108,6 +109,7 @@ def figures(output, rows, config, thresholds):
             fig.savefig(folder / name, dpi=120)
             plt.close(fig)
             links.append((title + (" | " + detail if detail else ""), "figures/" + name))
+            progress(f"Rendered figure {len(links)}: {title}, page {page + 1}")
     return links
 
 
@@ -145,6 +147,8 @@ table{{border-collapse:collapse;font-size:13px;width:100%}}th,td{{border-bottom:
 <p>Flags are quantitative review aids, not exclusion decisions. Missing metrics are not passes or zeros.
 Thresholds use a single pass within task, session, acquisition, echo and MRIQC-version groups.
 Scanner comparisons are descriptive, not causal tests. Image counts can exceed participant counts.</p>
+<p>Selected tasks: {escape(', '.join(state.get('selection', {}).get('task', [])) or 'all')};
+selected sessions: {escape(', '.join(state.get('selection', {}).get('session', [])) or 'all')}.</p>
 <nav><a href="run_qc.tsv">Image metrics</a><a href="flags.tsv">Flags</a><a href="thresholds.tsv">Thresholds</a>
 <a href="scanner_summary.tsv">Scanner summary</a><a href="validation.json">Validation</a><a href="methods.md">Methods</a></nav>
 <section><h2>Input completeness</h2><div class="table"><table><thead><tr><th>Image</th><th>MRIQC association</th><th>Flags</th><th>Missing metrics</th><th>Validation issues</th></tr></thead>

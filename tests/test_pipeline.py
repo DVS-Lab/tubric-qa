@@ -9,7 +9,7 @@ from tubric_qa.pipeline import build, check
 
 @pytest.fixture
 def no_plots(monkeypatch):
-    monkeypatch.setattr("tubric_qa.pipeline.figures", lambda *args: [])
+    monkeypatch.setattr("tubric_qa.pipeline.figures", lambda *args, **kwargs: [])
 
 
 def test_end_to_end_real_plots_readonly_and_check(dataset, tmp_path):

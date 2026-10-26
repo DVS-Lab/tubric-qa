@@ -8,9 +8,7 @@ import sys
 
 from . import __version__
 from .config import DEFAULT
-from .demo import generate
-from .mriqc import launch
-from .pipeline import build, check
+from .progress import Progress
 
 
 def parser():
@@ -30,6 +28,9 @@ def parser():
     )
     report.add_argument("--output", type=Path, required=True)
     report.add_argument("--config", type=Path)
+    report.add_argument("--task", action="append", help="Exact BIDS task label; repeat for multiple tasks. Excludes anatomy.")
+    report.add_argument("--session", action="append", help="Exact BIDS session label, e.g. 01; repeat for multiple sessions")
+    report.add_argument("--quiet", action="store_true", help="Suppress progress and heartbeats, not final results or errors")
     report.add_argument(
         "--extras", type=Path, help="Optional configured numeric metrics keyed by exact image_id"
     )
@@ -54,7 +55,7 @@ def parser():
     demo.add_argument("destination", type=Path)
     demo.add_argument("--subjects", type=int, default=12)
     mriqc = commands.add_parser(
-        "mriqc", help="Plan or explicitly launch MRIQC into a fresh directory"
+        "mriqc", help="Advanced: separately plan or launch MRIQC (never needed for build)"
     )
     mriqc.add_argument("--bids", type=Path, required=True)
     mriqc.add_argument("--existing", type=Path, action="append", default=[])
@@ -79,17 +80,28 @@ def main(argv=None):
             print(json.dumps(DEFAULT, indent=2))
             return 0
         if args.command == "demo":
+            from .demo import generate
+
             bids, mriqc = generate(args.destination, args.subjects)
             print(f"SYNTHETIC demo created. BIDS: {bids}; MRIQC: {mriqc}")
             return 0
         if args.command == "mriqc":
+            from .mriqc import launch
+
             return launch(args)
         if args.command == "build":
-            state = build(
-                args.bids, args.mriqc, args.output, args.config, args.extras, args.hash_images
-            )
+            with Progress(enabled=not args.quiet) as progress:
+                progress("Loading report libraries; no MRIQC processing will run")
+                from .pipeline import build
+
+                state = build(
+                    args.bids, args.mriqc, args.output, args.config, args.extras, args.hash_images,
+                    tasks=args.task, sessions=args.session, progress=progress,
+                )
             print(f"Report: {args.output.resolve() / 'index.html'}")
         else:
+            from .pipeline import check
+
             state = check(args.output, inputs=args.inputs)
             print(
                 "Report integrity verified."

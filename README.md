@@ -14,18 +14,16 @@ participant or changes an image.
 
 ## Quick Start
 
-Use Python 3.13 for the pinned reference environment (the package supports
-Python 3.10+ with independently resolved dependencies). Linux/macOS are the
-supported command-line platforms. MRIQC execution additionally requires its
-native installation, Docker, or Apptainer; report generation does not.
+Use Python 3.10 or newer on Linux/macOS. **You need raw BIDS data and existing
+MRIQC IQM JSONs. This command only builds a report; it never runs MRIQC,
+preprocessing, or smoothing.** No Docker, Apptainer, AFNI, FSL or TEDANA is needed.
 
 ```bash
 git clone https://github.com/DVS-Lab/tubric-qa.git
 cd tubric-qa
-python3.13 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-lock.txt
-python -m pip install --no-build-isolation --no-deps -e .
+python -m pip install .
 
 tubric-qa build \
   --bids /path/to/bids \
@@ -39,8 +37,55 @@ of local HTML, PNGs and tables; no server, login, telemetry, external JavaScript
 or internet connection is needed to view it. Share the folder, not only HTML.
 **Review its identifiers and local paths before sharing. It is not anonymized.**
 
-Alternatively, `python -m pip install .` resolves compatible dependencies;
-record the resulting environment and commit for your study.
+To report one task and session, use a **new** output directory:
+
+```bash
+tubric-qa build --bids /path/to/bids --mriqc /path/to/mriqc \
+  --task socialdoors --session 01 --output /path/to/qc-socialdoors-ses01
+tubric-qa check /path/to/qc-socialdoors-ses01 --inputs
+```
+
+Use your dataset's exact labels. Repeat `--task` or `--session` for multiple
+values. Values within each filter are ORed; task and session filters are ANDed.
+`--task` selects functional images only, not anatomy. With no filters, all
+BOLD/T1w/T2w images are included. All subjects, runs, echoes and parts within
+the selection remain visible; there is no implicit participant exclusion.
+Filters are saved in the report and reused by `check --inputs`.
+
+### Progress And Runtime
+
+Build prints elapsed time and stages immediately, with a heartbeat every 30
+seconds during longer operations. `--quiet` suppresses those updates. A
+heartbeat means the process is alive, not that a particular I/O call has finished.
+The final output directory appears only after successful validation; temporary
+files are built alongside it so incomplete reports are not mistaken for finished ones.
+
+This is much less work than MRIQC, but not just reading JSONs: PyBIDS first
+indexes the whole supplied BIDS root to resolve inherited metadata, then we read
+selected image headers, match existing IQMs, fingerprint inputs and render PNGs.
+Task/session filters reduce header reads and plotting, not the initial whole-root
+indexing. Shared/network storage, the number of images/echoes and figure groups
+can dominate runtime. There is no reliable cohort runtime estimate yet; use the
+elapsed stage messages rather than assuming silence means MRIQC is running.
+The first plot in a new environment may also take longer while Matplotlib
+builds its font cache; its cache directory must be writable.
+Avoid `--hash-images` unless you need full image-content hashes: the default uses
+image size/mtime and does not load image voxel arrays.
+
+Record the commit and `python -m pip freeze` for your study; report provenance
+also records core dependency versions. For the pinned **Python 3.13** reference
+environment instead of independently resolved dependencies:
+
+```bash
+python3.13 -m venv .venv-reference
+source .venv-reference/bin/activate
+python -m pip install -r requirements-lock.txt
+python -m pip install --no-build-isolation --no-deps -e .
+```
+
+Do not use that pinned reference lock with a different Python version. If
+installation fails, retain the original error and report `python --version`
+and `python -m pip --version`; no repository changes are normally needed.
 
 ## What You Get
 
@@ -94,38 +139,17 @@ versions, an extreme motion value and one deliberately missing MRIQC JSON.
 The latter is supposed to be reported. `--strict` returns exit 2 for that
 incompleteness while still producing the report.
 
-## MRIQC Missing?
+## Missing MRIQC Results
 
-Use the optional launcher to inspect a plan first. Nothing runs without
-`--execute`. Choose an MRIQC version appropriate for your study and explicitly
-pull its pinned image or provide a local SIF. Resource limits are required
-by defaults, not inferred from the full machine's core count.
+Missing results are listed in the report; `build` never computes them. To fill
+gaps, run MRIQC separately using your institution's workflow. An optional,
+advanced [MRIQC launcher](docs/mriqc.md) remains available for users who need it,
+but it is not part of report generation and never executes without `--execute`.
+The report's task/session filters do not configure that separate launcher.
 
-```bash
-tubric-qa mriqc --bids /path/to/bids \
-  --existing /path/to/existing-mriqc \
-  --output /path/to/new-mriqc --work-dir /scratch/new-mriqc-work \
-  --engine apptainer --image /containers/mriqc-version.sif \
-  --nprocs 8 --threads 1 --mem-gb 16
-# Review the plan; repeat the same command with --execute to run it.
-```
-
-Omit `--existing` when no MRIQC output exists. The launcher selects subjects
-with missing/invalid associations and writes a **fresh output**, preserving all
-existing MRIQC results. MRIQC runs the requested modalities for those subjects,
-so some existing scans may be measured again in the new directory. It does not
-claim per-image resume. To retain original measurements and fill gaps:
-
-```bash
-tubric-qa build --bids /path/to/bids \
-  --mriqc /path/to/existing-mriqc --mriqc /path/to/new-mriqc \
-  --output /path/to/new-qc-report
-```
-
-The first root with an exact match takes precedence, and shadowed candidate
-counts are recorded. Duplicates *within* a root remain ambiguous. An invalid
-primary match is not silently replaced: explicitly fix or change root priority.
-MRIQC receives `--no-sub --notrack`. See [MRIQC execution](docs/mriqc.md).
+You can supply multiple `--mriqc` roots. The first root with an exact match wins;
+shadowed candidates are counted. Duplicates within a root remain ambiguous, and
+an invalid primary match is not silently replaced with a fallback.
 
 ## Configuration And Optional Metrics
 
