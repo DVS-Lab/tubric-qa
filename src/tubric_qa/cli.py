@@ -56,6 +56,7 @@ def parser():
     redraw.add_argument("--output", type=Path, required=True)
     redraw.add_argument("--quiet", action="store_true")
     redraw.add_argument("--strict", action="store_true")
+    redraw.add_argument("--functional-only", action="store_true", help="Keep BOLD rows only; preserve their saved metrics, flags and thresholds")
     commands.add_parser("config", help="Print the complete default configuration JSON")
     demo = commands.add_parser("demo", help="Create explicitly synthetic BIDS/MRIQC data")
     demo.add_argument("destination", type=Path)
@@ -110,7 +111,7 @@ def main(argv=None):
                 progress("Loading plotting libraries; saved report only")
                 from .replot import replot
 
-                state = replot(args.source, args.output, progress=progress)
+                state = replot(args.source, args.output, progress=progress, functional_only=args.functional_only)
             print(f"Report: {args.output.resolve() / 'index.html'}")
             print("Saved snapshot replotted. Live inputs not checked.")
         else:

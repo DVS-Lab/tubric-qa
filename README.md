@@ -150,6 +150,10 @@ The original report stays untouched. The new report preserves its QC tables
 and unresolved findings; live inputs are not rechecked unless `check --inputs`
 is requested separately.
 
+If MRIQC was run for functional data only, add `--functional-only` to `replot`
+to show only saved BOLD measurements. Functional values, thresholds and flags
+remain unchanged; completeness is reported for that scope, not for anatomy.
+
 Recorded functional metrics: **tSNR, mean FD, standardized DVARS, MRIQC FWHM,
 EFC and FBER**. Structural T1w/T2w reports include FWHM, EFC, FBER, CNR and CJV.
 TEDANA, brain coverage and other metrics can be added through an explicit,

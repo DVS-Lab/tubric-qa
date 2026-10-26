@@ -28,6 +28,14 @@ plots/presentation change. Original analysis provenance is retained alongside
 new rendering provenance. This is a saved-snapshot refresh, not a new live-input
 validation; add `--inputs` to `check` only when that additional check is wanted.
 
+For studies that ran MRIQC for functional images only, add `--functional-only`
+to `replot`. This creates a BOLD-only view from the same saved tables. It omits
+anatomical rows and recalculates completeness counts for the selected scope,
+without recalculating or changing any retained metrics, flags or thresholds.
+Phase images remain explicitly not applicable. The original all-modality
+report and its findings remain unchanged; this does not claim anatomical QC
+was completed or constitute a fresh live-data inventory.
+
 ## Scanner Comparisons
 
 The plotted scanner group combines Manufacturer, ManufacturersModelName and

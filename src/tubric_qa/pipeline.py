@@ -18,23 +18,8 @@ from .report import figures, html_report, methods
 from .statistics import calculate
 
 
-def build(bids_dir, mriqc_dirs, output, config_path=None, extras=None, hash_images=False,
-          *, tasks=None, sessions=None, progress=None):
-    progress = progress or (lambda message: None)
-    selection = normalize_selection(tasks, sessions)
-    progress("Starting report-only build; MRIQC will not be launched")
-    inputs = [bids_dir, *mriqc_dirs, config_path, extras]
-    output = disjoint_output(output, inputs)
-    config = load_config(config_path)
-    rows, metadata = discover(bids_dir, selection, progress)
-    progress(f"Indexing existing MRIQC results in {len(mriqc_dirs)} root(s)")
-    indexes = [mriqc_index(root, selection) for root in mriqc_dirs]
-    progress(f"Matching MRIQC results to {len(rows)} selected images")
-    used, orphans = attach_mriqc(rows, mriqc_dirs, config, indexes=indexes)
-    if extras:
-        attach_extras(rows, extras, config)
-    progress("Calculating independent within-group QC flags and summaries")
-    thresholds, flags, summary = calculate(rows, config)
+def validation_state(rows, orphans, selection):
+    """Summarize input completeness independently of plotting or exclusions."""
     required = {"bold": ("tsnr", "fd_mean"), "T1w": ("efc", "cjv"), "T2w": ("efc", "cjv")}
     state = {
         "schema_version": 1,
@@ -60,6 +45,27 @@ def build(bids_dir, mriqc_dirs, output, config_path=None, extras=None, hash_imag
         state[key]
         for key in ("n_mriqc_unresolved", "n_identity_or_metadata_issues", "n_missing_core_metrics")
     )
+    return state
+
+
+def build(bids_dir, mriqc_dirs, output, config_path=None, extras=None, hash_images=False,
+          *, tasks=None, sessions=None, progress=None):
+    progress = progress or (lambda message: None)
+    selection = normalize_selection(tasks, sessions)
+    progress("Starting report-only build; MRIQC will not be launched")
+    inputs = [bids_dir, *mriqc_dirs, config_path, extras]
+    output = disjoint_output(output, inputs)
+    config = load_config(config_path)
+    rows, metadata = discover(bids_dir, selection, progress)
+    progress(f"Indexing existing MRIQC results in {len(mriqc_dirs)} root(s)")
+    indexes = [mriqc_index(root, selection) for root in mriqc_dirs]
+    progress(f"Matching MRIQC results to {len(rows)} selected images")
+    used, orphans = attach_mriqc(rows, mriqc_dirs, config, indexes=indexes)
+    if extras:
+        attach_extras(rows, extras, config)
+    progress("Calculating independent within-group QC flags and summaries")
+    thresholds, flags, summary = calculate(rows, config)
+    state = validation_state(rows, orphans, selection)
     # Capture all indexed candidates, including orphans, for reproducibility.
     all_iqms = {p for index in indexes for paths in index.values() for p in paths}
     paths = metadata | used | all_iqms | {Path(p).resolve() for p in (config_path, extras) if p}

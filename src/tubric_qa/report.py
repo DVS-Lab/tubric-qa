@@ -122,7 +122,7 @@ def figures(output, rows, config, thresholds, progress=None):
     return links
 
 
-def html_report(output, rows, config, links, state):
+def html_report(output, rows, config, links, state, scope_notice=""):
     rows_html = []
     for row in rows:
         missing = [
@@ -151,6 +151,7 @@ a{{color:#006e80}}section{{padding:20px 0;border-top:1px solid #ddd}}img{{max-wi
 table{{border-collapse:collapse;font-size:13px;width:100%}}th,td{{border-bottom:1px solid #ddd;padding:8px;text-align:left;overflow-wrap:anywhere}}th{{position:sticky;top:0;background:#edf3f4}}
 .status{{padding:12px;background:#edf3f4;border-left:4px solid #247d89}}code{{overflow-wrap:anywhere}}
 </style></head><body><main><h1>TUBRIC QA</h1>
+{('<p class="status">' + escape(scope_notice) + '</p>') if scope_notice else ''}
 <p class="status">{state["n_images"]} images; {state["n_subjects"]} participants; {state["n_mriqc_available"]} MRIQC matches;
 {state["n_mriqc_unresolved"]} unresolved MRIQC associations; {state["n_images_flagged"]} images with review flags.</p>
 <p>Flags are quantitative review aids, not exclusion decisions. Missing metrics are not passes or zeros.
