@@ -12,6 +12,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+def plotted_metrics(config, suffix):
+    selected = config.get("plot_metrics")
+    return [
+        metric
+        for metric in (config["metrics"] if selected is None else selected)
+        if metric in config["metrics"] and suffix in config["metrics"][metric]["modalities"]
+    ]
+
+
 def figures(output, rows, config, thresholds, progress=None):
     progress = progress or (lambda message: None)
     folder = output / "figures"
@@ -22,7 +31,7 @@ def figures(output, rows, config, thresholds, progress=None):
             groups[row["threshold_group"]].append(row)
     links = []
     for key, group in sorted(groups.items()):
-        metrics = [m for m, s in config["metrics"].items() if group[0]["suffix"] in s["modalities"]]
+        metrics = plotted_metrics(config, group[0]["suffix"])
         # Paginate panels to keep arbitrary optional metric sets legible.
         scanners = sorted({r["scanner_group"] for r in group})
         for page in range(math.ceil(len(metrics) / 3)):
@@ -147,6 +156,8 @@ table{{border-collapse:collapse;font-size:13px;width:100%}}th,td{{border-bottom:
 <p>Flags are quantitative review aids, not exclusion decisions. Missing metrics are not passes or zeros.
 Thresholds use a single pass within task, session, acquisition, echo and MRIQC-version groups.
 Scanner comparisons are descriptive, not causal tests. Image counts can exceed participant counts.</p>
+<p>Plots show selected metrics only. Image metrics, flags and completeness tables retain all configured metrics;
+the flag total can include supplementary metrics not plotted here.</p>
 <p>Selected tasks: {escape(', '.join(state.get('selection', {}).get('task', [])) or 'all')};
 selected sessions: {escape(', '.join(state.get('selection', {}).get('session', [])) or 'all')}.</p>
 <nav><a href="run_qc.tsv">Image metrics</a><a href="flags.tsv">Flags</a><a href="thresholds.tsv">Thresholds</a>
@@ -176,6 +187,8 @@ def methods(output, config):
         "in one pass; flagged images are not removed before estimating another fence. Groups with "
         "zero IQR or insufficient observations are not classified. Smoothness is descriptive by "
         "default. No participant exclusions or selected-cohort files are generated.\n\n"
+        "The plot_metrics configuration controls display only. Supplementary metrics, review flags, "
+        "thresholds and input-completeness checks remain in the tables regardless of plot selection.\n\n"
         "Software labels default to exact header strings. User-supplied exact aliases, additional "
         "grouping fields and metric directions are saved in config.json. No scanner-era inference "
         "from acquisition dates is performed. Unknown metadata remains visible.\n\n"

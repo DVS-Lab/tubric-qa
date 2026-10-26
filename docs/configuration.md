@@ -4,6 +4,19 @@ Generate a complete starter configuration with `tubric-qa config`. Unknown keys
 fail rather than being ignored. Supplying `metrics` replaces the full metric
 dictionary, so edit the generated configuration when adding metrics.
 
+## Plot Selection
+
+Default plots contain smoothness (`fwhm_mean_mm`), tSNR (`tsnr`) and mean FD
+(`fd_mean`), in that order. Only metrics configured and applicable to the image
+type are plotted, so anatomy shows smoothness only. Supplementary MRIQC metrics
+remain in the tables and review flags; hiding a panel does not change thresholds,
+input-completeness checks, or exclusion decisions.
+
+Set `plot_metrics` to a list of metric keys to choose panels, or to `null` to
+plot every configured metric. Add optional metric keys here to display them.
+Existing reports are unchanged; rebuild into a new output directory to use
+the simplified layout.
+
 ## Scanner Comparisons
 
 The plotted scanner group combines Manufacturer, ManufacturersModelName and

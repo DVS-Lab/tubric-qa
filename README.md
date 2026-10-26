@@ -133,7 +133,12 @@ See Python's [`ensurepip` documentation](https://docs.python.org/3.13/library/en
 | `config.json`, `methods.md` | Exact rules and methodological description |
 | `provenance.json`, `validation.json` | Versions, code/input/output fingerprints and completeness |
 
-Default functional metrics: **tSNR, mean FD, standardized DVARS, MRIQC FWHM,
+Default plots show **smoothness (MRIQC FWHM in mm), tSNR, and mean FD**.
+Anatomical plots show smoothness only; tSNR and FD are functional metrics.
+Supplementary metrics remain in the downloadable tables, not additional panels.
+Plot selection does not change review flags, completeness checks or exclusions.
+
+Recorded functional metrics: **tSNR, mean FD, standardized DVARS, MRIQC FWHM,
 EFC and FBER**. Structural T1w/T2w reports include FWHM, EFC, FBER, CNR and CJV.
 TEDANA, brain coverage and other metrics can be added through an explicit,
 exact-image-keyed table and metric configuration; they are not required.

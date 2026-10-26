@@ -72,6 +72,7 @@ DEFAULT = {
     "min_n": 5,
     "additional_group_fields": [],
     "software_labels": {},
+    "plot_metrics": ["fwhm_mean_mm", "tsnr", "fd_mean"],
     "metrics": METRICS,
 }
 
@@ -104,6 +105,14 @@ def load_config(path=None):
         raise ValueError("software_labels must map exact strings to nonempty labels")
     if not isinstance(result["metrics"], dict) or not result["metrics"]:
         raise ValueError("metrics must be a nonempty object")
+    plotted = result["plot_metrics"]
+    if plotted is not None and (
+        not isinstance(plotted, list)
+        or not plotted
+        or any(not isinstance(key, str) or key not in (METRICS | result["metrics"]) for key in plotted)
+        or len(set(plotted)) != len(plotted)
+    ):
+        raise ValueError("plot_metrics must be null or a nonempty list of unique known metrics")
     for key, metric in result["metrics"].items():
         reserved = set(GROUP_FIELDS) | {
             "subject",
